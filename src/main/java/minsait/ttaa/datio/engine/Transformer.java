@@ -23,7 +23,8 @@ public class Transformer extends Writer {
         df.printSchema();
 
         df = cleanData(df);
-        df = exampleWindowFunction(df);
+        df = windowFunctionAgeRange(df);
+        df = windowFunctionRankByPationalityPosition(df);
         df = columnSelection(df);
 
         // for show 100 records after your transformations and show the Dataset schema
@@ -37,10 +38,17 @@ public class Transformer extends Writer {
     private Dataset<Row> columnSelection(Dataset<Row> df) {
         return df.select(
                 shortName.column(),
-                overall.column(),
+                longName.column(),
+                age.column(),
                 heightCm.column(),
+                weightKg.column(),
+                nationality.column(),
+                club_name.column(),
+                overall.column(),
+                potential.column(),
                 teamPosition.column(),
-                catHeightByPosition.column()
+                ageRange.column(),
+                rankByPationalityPosition.column()
         );
     }
 
@@ -97,6 +105,51 @@ public class Transformer extends Writer {
     }
 
 
+    private Dataset<Row> windowFunctionAgeRange(Dataset<Row> df) {
+        WindowSpec w = Window
+                .partitionBy(age.column())
+                .orderBy(age.column());
+
+        Column rank = rank().over(w);
+
+        Column rule = when(rank.$less(23), "A")
+                .when(rank.$less(27), "B")
+                .when(rank.$less(32), "C")
+                .otherwise("D");
+
+        df = df.withColumn(ageRange.getName(), rule);
+
+        return df;
+    }
+
+    private Dataset<Row> windowFunctionRankByPationalityPosition(Dataset<Row> df) {
+        WindowSpec w = Window
+                .partitionBy(nationality.column())
+                .partitionBy(teamPosition.column())
+                .orderBy(overall.column().desc());
+
+        Column rank = rank().over(w);
+
+        df = df.withColumn(rankByPationalityPosition.getName(), row_number().over(w));
+
+        return df;
+    }
+
+
+    private Dataset<Row> windowFunctionPotentialVsOverall(Dataset<Row> df) {
+        WindowSpec w = Window
+                .partitionBy(nationality.column())
+                .partitionBy(teamPosition.column())
+                .orderBy(overall.column().desc());
+
+        Column rank = rank().over(w);
+
+
+        df = df.withColumn(rankByPationalityPosition.getName(), rank().expr();
+
+
+        return df;
+    }
 
 
 }
