@@ -1,5 +1,6 @@
 package minsait.ttaa.datio.engine;
 
+import minsait.ttaa.datio.common.naming.configuracion;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -7,6 +8,10 @@ import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.expressions.Window;
 import org.apache.spark.sql.expressions.WindowSpec;
 import org.jetbrains.annotations.NotNull;
+
+import javax.security.auth.login.Configuration;
+import java.io.FileReader;
+import java.util.Properties;
 
 import static minsait.ttaa.datio.common.Common.*;
 import static minsait.ttaa.datio.common.naming.PlayerInput.*;
@@ -25,6 +30,8 @@ public class Transformer extends Writer {
         df = cleanData(df);
         df = windowFunctionAgeRange(df);
         df = windowFunctionRankByPationalityPosition(df);
+        df = windowFunctionPotentialVsOverall(df);
+        df = filtros(df);
         df = columnSelection(df);
 
         // for show 100 records after your transformations and show the Dataset schema
@@ -32,7 +39,7 @@ public class Transformer extends Writer {
         df.printSchema();
 
         // Uncomment when you want write your final output
-        //write(df);
+        write(df);
     }
 
     private Dataset<Row> columnSelection(Dataset<Row> df) {
@@ -48,7 +55,8 @@ public class Transformer extends Writer {
                 potential.column(),
                 teamPosition.column(),
                 ageRange.column(),
-                rankByPationalityPosition.column()
+                rankByPationalityPosition.column(),
+                potentialVsOverall.column()
         );
     }
 
@@ -56,10 +64,13 @@ public class Transformer extends Writer {
      * @return a Dataset readed from csv file
      */
     private Dataset<Row> readInput() {
+
+        configuracion config= new configuracion();
+
         Dataset<Row> df = spark.read()
                 .option(HEADER, true)
                 .option(INFER_SCHEMA, true)
-                .csv(INPUT_PATH);
+                .csv(config.getInput());
         return df;
     }
 
@@ -128,8 +139,6 @@ public class Transformer extends Writer {
                 .partitionBy(teamPosition.column())
                 .orderBy(overall.column().desc());
 
-        Column rank = rank().over(w);
-
         df = df.withColumn(rankByPationalityPosition.getName(), row_number().over(w));
 
         return df;
@@ -137,16 +146,28 @@ public class Transformer extends Writer {
 
 
     private Dataset<Row> windowFunctionPotentialVsOverall(Dataset<Row> df) {
-        WindowSpec w = Window
-                .partitionBy(nationality.column())
-                .partitionBy(teamPosition.column())
-                .orderBy(overall.column().desc());
 
-        Column rank = rank().over(w);
+        df = df.withColumn(potentialVsOverall.getName(), potential.column().divide(overall.column()));
+        
+        return df;
+    }
 
-
-        df = df.withColumn(rankByPationalityPosition.getName(), rank().expr();
-
+    private Dataset<Row> filtros(Dataset<Row> df) {
+        df = df.filter(
+                rankByPationalityPosition.column().$less(3).or(
+                        ageRange.column().isin("B","C").and(
+                                potentialVsOverall.column().$greater(1.15)
+                        )
+                ).or(
+                        ageRange.column().isin("A").and(
+                                potentialVsOverall.column().$greater(1.25)
+                        )
+                ).or(
+                        ageRange.column().isin("D").and(
+                                rankByPationalityPosition.column().$less(5)
+                        )
+                )
+        );
 
         return df;
     }
